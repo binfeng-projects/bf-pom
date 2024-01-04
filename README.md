@@ -9,8 +9,8 @@
 
 ## ⭐Star & donate
 爆肝不易。开源不易。如果本人的任何项目，任何文档，任何话术恰巧有帮助到你一点点的话，也可以考虑赞一杯星爸爸。
-- [![zsm.jpg](https://cdn.jsdelivr.net/gh/luckybf/resource@main/pic/zsm.jpg)](https://cdn.jsdelivr.net/gh/luckybf/resource@main/pic/zsm.jpg)
-- [![zfb.png](https://cdn.jsdelivr.net/gh/luckybf/resource@main/pic/zfb.png)](https://cdn.jsdelivr.net/gh/luckybf/resource@main/pic/zfb.png)
+- [![zsm.jpg](https://cdn.jsdelivr.net/gh/luckybf/resource@main/pic/zsm.jpg)](https://smms.app/image/uy2lF5CLjpUsK83)
+- [![zfb.png](https://cdn.jsdelivr.net/gh/luckybf/resource@main/pic/zfb.png)](https://smms.app/image/mE1LTl8UAeIGWJX)
 
 ------------------------------------------------------------------------------
 ## 如果上面打赏图片无法显示，可打开下面二维码
