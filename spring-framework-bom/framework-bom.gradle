@@ -1,0 +1,92 @@
+import groovy.util.Node
+
+description = "Spring Framework (Bill of Materials)"
+
+apply plugin: 'java-platform'
+apply from: "$rootDir/gradle/publications.gradle"
+
+group = "org.springframework"
+
+dependencies {
+	constraints {
+		parent.moduleProjects.sort { "$it.name" }.each {
+			api it
+		}
+	}
+}
+
+publishing {
+	publications {
+		mavenJava(MavenPublication) {
+			artifactId = 'spring-framework-bom'
+			from components.javaPlatform
+		}
+	}
+}
+
+def myFrameworkVersion = "6.1.1-SNAPSHOT"
+def excludedProjects = ['framework-api','framework-platform','framework-bom','framework-docs','integration-tests']
+def excludedNodes = ['developers','licenses','name','description','url','scm','organization','issueManagement','artifactId','version']
+configure(tasks.generatePomFileForMavenJavaPublication) {
+	doLast {
+		copy {
+			from "$buildDir/publications/mavenJava"
+			into "$rootDir"
+			include 'pom-default.xml'
+			rename { fileName ->
+				"pom.xml"
+			}
+		}
+
+		// 获取生成的 POM 文件路径
+		def pomFile = file("$rootDir/pom.xml")
+
+		// 使用 Groovy 的 XML 处理库来加载 POM 文件
+		def root = new groovy.xml.XmlParser().parse(pomFile)
+		//添加parent标签
+		Node parentNode = new Node(null,"parent")
+		parentNode.appendNode('groupId',"org.bf.parent")
+		parentNode.appendNode('artifactId',"bf-parent")
+		parentNode.appendNode('version', "0.0.8-SNAPSHOT")
+		//这句是为了挪动位置
+		root.children().add(0,parentNode)
+
+		for (String nodeName : excludedNodes) { //移除dependency之外的其他无关元素
+			if (root[nodeName]) {
+				root.remove(root[nodeName])
+			}
+		}
+		root.children().add(2,new Node(null,"artifactId", "spring"))
+		root.children().add(3,new Node(null,"version", "\${revision}"))
+		def props = root.properties[0] ?: root.appendNode("properties")
+		if (props) {
+			props.children().add(0,new Node(null,"revision",myFrameworkVersion))
+		}
+		Node deps = root.dependencyManagement.dependencies[0]
+		for(Node dep : deps.children()) {
+			if(dep.version && dep.groupId.text() == 'org.springframework') {
+				dep.version*.value = "\${project.version}"
+			}
+		}
+		root.build.pluginManagement.plugins
+				.plugin
+				.findAll { dep ->
+					// find all dependencies with runtime scope
+					dep.groupId.text() == 'org.springframework'
+				}
+				.each { dep ->
+					if(dep.version) {
+						dep.version*.value = "\${project.version}"
+					}
+				}
+		Node moduleNode = root.appendNode("modules")
+		for (Map.Entry<String,Project> projectEntry : rootProject.childProjects.entrySet()) {
+			if (!excludedProjects.contains(projectEntry.getKey())) {
+				moduleNode.appendNode('module',projectEntry.getKey())
+			}
+		}
+		// 将修改后的 POM 文件保存回原始路径
+		pomFile.text = groovy.xml.XmlUtil.serialize(root)
+
+	}
+}

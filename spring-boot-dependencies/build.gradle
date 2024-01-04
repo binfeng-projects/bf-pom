@@ -1,0 +1,335 @@
+plugins {
+	id "base"
+	id "org.jetbrains.kotlin.jvm" apply false // https://youtrack.jetbrains.com/issue/KT-30276
+	id "io.spring.nohttp" version "0.0.11"
+}
+
+description = "Spring Boot Build"
+
+defaultTasks 'build'
+
+nohttp {
+	allowlistFile = project.file("src/nohttp/allowlist.lines")
+	source.exclude "**/bin/**"
+	source.exclude "**/build/**"
+	source.exclude "**/out/**"
+	source.exclude "**/target/**"
+	source.exclude "**/.settings/**"
+	source.exclude "**/.classpath"
+	source.exclude "**/.project"
+	source.exclude "spring-boot-project/spring-boot-tools/spring-boot-buildpack-platform/src/test/resources/org/springframework/boot/buildpack/platform/docker/export.tar"
+}
+
+check {
+	dependsOn checkstyleNohttp
+}
+
+allprojects {
+	group "org.springframework.boot"
+
+	repositories {
+		mavenCentral()
+		if (version.contains('-')) {
+			maven { url "https://repo.spring.io/milestone" }
+		}
+		if (version.endsWith('-SNAPSHOT')) {
+			maven { url "https://repo.spring.io/snapshot" }
+		}
+	}
+
+	configurations.all {
+		resolutionStrategy.cacheChangingModulesFor 0, "minutes"
+	}
+}
+
+tasks.named("checkstyleNohttp").configure {
+	maxHeapSize = "1536m"
+}
+
+def excludedNodes = ['developers','licenses','name','description','url','scm','organization','issueManagement','groupId','version','dependencyManagement']
+def excludedProjects = ['spring-boot-dependencies','spring-boot-starter-parent','spring-boot-parent'
+						,'spring-boot-smoke-test-ant','spring-boot-system-tests','spring-boot-gradle-plugin','spring-boot-gradle-test-support']
+subprojects { subproject ->
+	if (!excludedProjects.contains(subproject.name)) {
+		model {
+			tasks.generatePomFileForCustomMavenPublication {
+				destination = file("$projectDir/pom.xml")
+			}
+		}
+		//复用init
+		apply plugin: 'java'
+		apply plugin: 'maven-publish'
+		publishing {
+			publications {
+				customMaven(MavenPublication) {
+					from components.java
+					// 在这里自定义生成的 POM 文件内容
+					pom.withXml {
+						def root = asNode()
+						//添加parent标签
+						Node parentNode = new Node(null,"parent")
+						parentNode.appendNode('groupId', project.getParent().group)
+						parentNode.appendNode('artifactId',project.getParent().name)
+						parentNode.appendNode('version', "\${revision}")
+						//这句是为了挪动位置
+						root.children().add(0,parentNode)
+						Node moduleNode = null
+						if(childProjects != null && !childProjects.isEmpty()) {
+							moduleNode = root.appendNode("modules")
+							for (Map.Entry<String,Project> projectEntry : childProjects.entrySet()) {
+								if (excludedProjects.contains(projectEntry.getKey())) {
+									continue
+								}
+								moduleNode.appendNode('module',projectEntry.getKey())
+							}
+							root.children().add(1,new Node(null,"packaging","pom"))
+//							if(project.name == 'spring-boot-project' && moduleNode != null) {
+//								moduleNode.appendNode('module',"spring-boot-dependencies")
+//							}
+						}
+						for (String nodeName : excludedNodes) { //移除dependency之外的其他无关元素
+							if (root[nodeName]) {
+								root.remove(root[nodeName])
+							}
+						}
+						Node deps = root.dependencies[0] ?: root.appendNode("dependencies")
+						try {
+							def optionalConfiguration = project.configurations.getByName('optional')
+							if(optionalConfiguration) {
+								optionalConfiguration.dependencies.each { dep ->
+									def dependencyNode = deps.appendNode('dependency')
+									dependencyNode.appendNode('groupId', dep.group)
+									dependencyNode.appendNode('artifactId', dep.name)
+									//没有version
+//									dependencyNode.appendNode('version', dep.getVersion())
+									dependencyNode.appendNode('optional', true)
+								}
+							}
+						} catch (Exception e) {
+
+						}
+						if(subproject.name == 'spring-boot-loader') {
+							def dependencyNode = deps.appendNode('dependency')
+							dependencyNode.appendNode('groupId','org.springframework')
+							dependencyNode.appendNode('artifactId', 'spring-core')
+							dependencyNode.appendNode('optional', true)
+							def node1 = deps.appendNode('dependency')
+							node1.appendNode('groupId','org.springframework')
+							node1.appendNode('artifactId', 'spring-core-test')
+							node1.appendNode('optional', true)
+							def node2 = deps.appendNode('dependency')
+							node2.appendNode('groupId','org.springframework.boot')
+							node2.appendNode('artifactId', 'spring-boot-test-support')
+							node2.appendNode('optional', true)
+						}
+						if(subproject.name == 'spring-boot-loader-classic') {
+							def dependencyNode = deps.appendNode('dependency')
+							dependencyNode.appendNode('groupId','org.springframework')
+							dependencyNode.appendNode('artifactId', 'spring-core')
+							dependencyNode.appendNode('optional', true)
+							def node1 = deps.appendNode('dependency')
+							node1.appendNode('groupId','org.springframework')
+							node1.appendNode('artifactId', 'spring-core-test')
+							node1.appendNode('optional', true)
+							def node2 = deps.appendNode('dependency')
+							node2.appendNode('groupId','org.springframework.boot')
+							node2.appendNode('artifactId', 'spring-boot-test-support')
+							node2.appendNode('optional', true)
+						}
+						if(subproject.name == 'spring-boot') {
+							def node1 = deps.appendNode('dependency')
+							node1.appendNode('groupId','org.springframework.boot')
+							node1.appendNode('artifactId', 'spring-boot-test-support')
+							node1.appendNode('optional', true)
+						}
+						if(subproject.name == 'spring-boot-test-support') {
+							def dependencyNode = deps.appendNode('dependency')
+							dependencyNode.appendNode('groupId','org.springframework')
+							dependencyNode.appendNode('artifactId', 'spring-context')
+							dependencyNode.appendNode('optional', true)
+						}
+						if(subproject.name == 'spring-boot-properties-migrator') {
+							def dependencyNode = deps.appendNode('dependency')
+							dependencyNode.appendNode('groupId','org.springframework.boot')
+							dependencyNode.appendNode('artifactId', 'spring-boot-test')
+							dependencyNode.appendNode('optional', true)
+						}
+						if(subproject.name == 'spring-boot-actuator') {
+							def dependencyNode = deps.appendNode('dependency')
+							dependencyNode.appendNode('groupId','org.springframework.boot')
+							dependencyNode.appendNode('artifactId', 'spring-boot-test')
+							dependencyNode.appendNode('optional', true)
+							def node1 = deps.appendNode('dependency')
+							node1.appendNode('groupId','org.springframework')
+							node1.appendNode('artifactId', 'spring-test')
+							node1.appendNode('optional', true)
+							def node2 = deps.appendNode('dependency')
+							node2.appendNode('groupId','org.springframework.boot')
+							node2.appendNode('artifactId', 'spring-boot-autoconfigure')
+							node2.appendNode('optional', true)
+							def node3 = deps.appendNode('dependency')
+							node3.appendNode('groupId','org.springframework.boot')
+							node3.appendNode('artifactId', 'spring-boot-test-support')
+							node3.appendNode('optional', true)
+						}
+						if(subproject.name == 'spring-boot-actuator-autoconfigure') {
+							def node2 = deps.appendNode('dependency')
+							node2.appendNode('groupId','org.springframework.boot')
+							node2.appendNode('artifactId', 'spring-boot-test')
+							node2.appendNode('optional', true)
+							def node3 = deps.appendNode('dependency')
+							node3.appendNode('groupId','org.springframework.boot')
+							node3.appendNode('artifactId', 'spring-boot-test-support')
+							node3.appendNode('optional', true)
+						}
+						if(subproject.name == 'spring-boot-testcontainers') {
+							def node1 = deps.appendNode('dependency')
+							node1.appendNode('groupId','org.springframework')
+							node1.appendNode('artifactId', 'spring-jms')
+							node1.appendNode('optional', true)
+							def node2 = deps.appendNode('dependency')
+							node2.appendNode('groupId','org.springframework.boot')
+							node2.appendNode('artifactId', 'spring-boot-test')
+							node2.appendNode('optional', true)
+							def node3 = deps.appendNode('dependency')
+							node3.appendNode('groupId','org.springframework.boot')
+							node3.appendNode('artifactId', 'spring-boot-test-support')
+							node3.appendNode('optional', true)
+							def node4 = deps.appendNode('dependency')
+							node4.appendNode('groupId','org.springframework.pulsar')
+							node4.appendNode('artifactId', 'spring-pulsar')
+							node4.appendNode('optional', true)
+						}
+						if(subproject.name == 'spring-boot-test-autoconfigure') {
+							def dependencyNode = deps.appendNode('dependency')
+							dependencyNode.appendNode('groupId','org.springframework.boot')
+							dependencyNode.appendNode('artifactId', 'spring-boot-actuator-autoconfigure')
+							dependencyNode.appendNode('optional', true)
+							def node2 = deps.appendNode('dependency')
+							node2.appendNode('groupId','org.springframework.boot')
+							node2.appendNode('artifactId', 'spring-boot-testcontainers')
+							node2.appendNode('optional', true)
+							def node3 = deps.appendNode('dependency')
+							node3.appendNode('groupId','org.springframework.boot')
+							node3.appendNode('artifactId', 'spring-boot-test-support')
+							node3.appendNode('optional', true)
+						}
+						if(subproject.name == 'spring-boot-devtools') {
+							def node1 = deps.appendNode('dependency')
+							node1.appendNode('groupId','org.springframework')
+							node1.appendNode('artifactId', 'spring-websocket')
+							node1.appendNode('optional', true)
+							def node2 = deps.appendNode('dependency')
+							node2.appendNode('groupId','org.springframework.boot')
+							node2.appendNode('artifactId', 'spring-boot-test')
+							node2.appendNode('optional', true)
+							def node3 = deps.appendNode('dependency')
+							node3.appendNode('groupId','org.springframework.boot')
+							node3.appendNode('artifactId', 'spring-boot-test-support')
+							node3.appendNode('optional', true)
+						}
+						if(subproject.name == 'spring-boot-docker-compose') {
+							def node3 = deps.appendNode('dependency')
+							node3.appendNode('groupId','org.springframework.boot')
+							node3.appendNode('artifactId', 'spring-boot-test-support')
+							node3.appendNode('optional', true)
+						}
+						if(subproject.name == 'spring-boot-test') {
+							def node1 = deps.appendNode('dependency')
+							node1.appendNode('groupId','org.springframework')
+							node1.appendNode('artifactId', 'spring-webmvc')
+							node1.appendNode('optional', true)
+							def dependencyNode = deps.appendNode('dependency')
+							dependencyNode.appendNode('groupId','org.springframework')
+							dependencyNode.appendNode('artifactId', 'spring-core-test')
+							dependencyNode.appendNode('optional', true)
+							def node2 = deps.appendNode('dependency')
+							node2.appendNode('groupId','org.springframework.boot')
+							node2.appendNode('artifactId', 'spring-boot-test-support')
+							node2.appendNode('optional', true)
+						}
+						if(subproject.name == 'spring-boot-autoconfigure') {
+							def node1 = deps.appendNode('dependency')
+							node1.appendNode('groupId','org.springframework')
+							node1.appendNode('artifactId', 'spring-test')
+							node1.appendNode('optional', true)
+							def node2 = deps.appendNode('dependency')
+							node2.appendNode('groupId','org.springframework.boot')
+							node2.appendNode('artifactId', 'spring-boot-test-support')
+							node2.appendNode('optional', true)
+							def node3 = deps.appendNode('dependency')
+							node3.appendNode('groupId','org.springframework.boot')
+							node3.appendNode('artifactId', 'spring-boot-test')
+							node3.appendNode('optional', true)
+						}
+						if(subproject.name == 'spring-boot-buildpack-platform') {
+							def node2 = deps.appendNode('dependency')
+							node2.appendNode('groupId','org.springframework.boot')
+							node2.appendNode('artifactId', 'spring-boot-test-support')
+							node2.appendNode('optional', true)
+						}
+						if(subproject.name == 'spring-boot-autoconfigure-processor') {
+							def node1 = deps.appendNode('dependency')
+							node1.appendNode('groupId','org.springframework')
+							node1.appendNode('artifactId', 'spring-core-test')
+							node1.appendNode('optional', true)
+						}
+						if(subproject.name == 'spring-boot-configuration-processor') {
+							def node1 = deps.appendNode('dependency')
+							node1.appendNode('groupId','org.springframework')
+							node1.appendNode('artifactId', 'spring-core-test')
+							node1.appendNode('optional', true)
+						}
+						if(subproject.name == 'spring-boot-configuration-processor-tests') {
+							def node2 = deps.appendNode('dependency')
+							node2.appendNode('groupId','org.springframework.boot')
+							node2.appendNode('artifactId', 'spring-boot-configuration-metadata')
+							node2.appendNode('optional', true)
+						}
+						if(subproject.name == 'spring-boot-tests') {
+							def dependencyNode = deps.appendNode('dependency')
+							dependencyNode.appendNode('groupId', 'org.springframework.boot')
+							dependencyNode.appendNode('artifactId', 'spring-boot-test-autoconfigure')
+							dependencyNode.appendNode('optional', true)
+							def node1 = deps.appendNode('dependency')
+							node1.appendNode('groupId','org.springframework.boot')
+							node1.appendNode('artifactId', 'spring-boot-testcontainers')
+							node1.appendNode('optional', true)
+							def node2 = deps.appendNode('dependency')
+							node2.appendNode('groupId','org.springframework.boot')
+							node2.appendNode('artifactId', 'spring-boot-test-support')
+							node2.appendNode('optional', true)
+							def node3 = deps.appendNode('dependency')
+							node3.appendNode('groupId','org.springframework.boot')
+							node3.appendNode('artifactId', 'spring-boot-test')
+							node3.appendNode('optional', true)
+						}
+						for(Node dep : deps.children()) {
+							if(dep.version && dep.groupId.text() == 'org.springframework.boot') {
+								dep.remove(dep.version)
+							}
+							if(dep.version && dep.groupId.text() == 'org.springframework') {
+								dep.remove(dep.version)
+							}
+							if(dep.scope) {
+								dep.remove(dep.scope)
+							}
+						}
+					}
+				}
+			}
+		}
+	} else if(subproject.name == 'spring-boot-parent') {
+		apply plugin: 'java-platform'
+		apply plugin: 'maven-publish'
+		publishing {
+			publications {
+				customMaven(MavenPublication) {
+					artifactId = 'spring-boot-parent'
+					from components.javaPlatform
+				}
+			}
+		}
+
+	}
+}
