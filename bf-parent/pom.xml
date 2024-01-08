@@ -21,11 +21,12 @@
     <maven.compiler.compilerVersion>${java.version}</maven.compiler.compilerVersion>
 
 
-    <jar.lombok>1.18.26</jar.lombok>
+    <jar.lombok>1.18.30</jar.lombok>
     <jar.mapstruct>1.5.5.Final</jar.mapstruct>
     <jar.lombok-mapstruct>0.2.0</jar.lombok-mapstruct>
 
     <spring-boot.version>3.2.0-SNAPSHOT</spring-boot.version>
+    <guava.version>32.0.1-jre</guava.version>
     <!-- maven plugins -->
     <plugin.resources>3.3.1</plugin.resources>
     <plugin.source>3.3.0</plugin.source>
@@ -36,6 +37,7 @@
     <plugin.flatten-maven>1.5.0</plugin.flatten-maven>
     <plugin.build-helper-maven>3.4.0</plugin.build-helper-maven>
     <plugin.shade>3.5.0</plugin.shade>
+    <plugin.enforcer>3.4.1</plugin.enforcer>
   </properties>
   <profiles>
     <profile>
@@ -235,6 +237,118 @@
             </execution>
           </executions>
         </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-enforcer-plugin</artifactId>
+          <version>${plugin.enforcer}</version>
+          <executions>
+            <execution>
+              <id>enforce</id>
+              <goals>
+                <goal>enforce</goal>
+              </goals>
+              <phase>validate</phase>
+              <configuration>
+                <rules>
+                  <banDuplicatePomDependencyVersions/>
+                  <!--
+                  <requireUpperBoundDeps>
+                    <excludes>
+                      <exclude>com.aliyun:credentials-java</exclude>
+                      <exclude>com.aliyun:tea-util</exclude>
+                    </excludes>
+                  </requireUpperBoundDeps>
+                  -->
+                  <dependencyConvergence>
+                    <excludes>
+                      <exclude>org.codehaus.plexus</exclude>
+                      <exclude>org.jetbrains</exclude>
+                      <exclude>org.jetbrains.kotlin</exclude>
+                      <exclude>com.aliyun:credentials-java</exclude>
+                      <exclude>com.aliyun:tea-util</exclude>
+                    </excludes>
+                  </dependencyConvergence>
+                  <requireJavaVersion>
+                    <message>
+                      <![CDATA[You are running an older version of Java. This application requires at least JDK ${java.version}.]]>
+                    </message>
+                    <version>[${java.version}.0,)</version>
+                  </requireJavaVersion>
+                  <!-- 不要把 lombok 引入到runtime -->
+                  <!--
+                  <bannedDependencies>
+                    <searchTransitive>true</searchTransitive>
+                    <excludes>
+                      <exclude>org.projectlombok:lombok:*:jar:compile</exclude>
+                      <exclude>org.projectlombok:lombok:*:jar:runtime</exclude>
+                    </excludes>
+                    <message>
+                      <![CDATA[Lombok must not to be included into runtime]]>
+                    </message>
+                  </bannedDependencies>
+                  -->
+                  <!-- logger -->
+                  <bannedDependencies>
+                    <searchTransitive>true</searchTransitive>
+                    <excludes>
+                      <exclude>org.apache.log4j</exclude>
+                    </excludes>
+                    <message><![CDATA[Don't use log4j2]]></message>
+                  </bannedDependencies>
+                  <bannedDependencies>
+                    <searchTransitive>true</searchTransitive>
+                    <excludes>
+                      <exclude>org.apache.logging.log4j</exclude>
+                    </excludes>
+                    <message>
+                      <![CDATA[Since log4j2 is not allow to use, you don't need [org.apache.logging.log4j]]]>
+                    </message>
+                  </bannedDependencies>
+                  <bannedDependencies>
+                    <searchTransitive>true</searchTransitive>
+                    <excludes>
+                      <exclude>log4j</exclude>
+                    </excludes>
+                    <message><![CDATA[Don't use log4j]]></message>
+                  </bannedDependencies>
+                  <bannedDependencies>
+                    <searchTransitive>true</searchTransitive>
+                    <excludes>
+                      <exclude>org.slf4j:slf4j-log4j12</exclude>
+                    </excludes>
+                    <message><![CDATA[Don't use log4j binding]]></message>
+                  </bannedDependencies>
+                  <!-- unit test  -->
+                  <!--
+                  <bannedDependencies>
+                    <searchTransitive>true</searchTransitive>
+                    <excludes>
+                      <exclude>org.test</exclude>
+                    </excludes>
+                    <message><![CDATA[Don't use TestNG]]></message>
+                  </bannedDependencies>
+                  <bannedDependencies>
+                    <searchTransitive>true</searchTransitive>
+                    <excludes>
+                      <exclude>junit:*:*:jar:compile</exclude>
+                      <exclude>junit:*:*:jar:runtime</exclude>
+                    </excludes>
+                    <message><![CDATA[Don't include Junit4 in runtime]]></message>
+                  </bannedDependencies>
+                  <bannedDependencies>
+                    <searchTransitive>true</searchTransitive>BannedDependencies
+                    <excludes>
+                      <exclude>org.junit.jupiter:*:*:jar:compile</exclude>
+                      <exclude>org.junit.jupiter:*:*:jar:runtime</exclude>
+                    </excludes>
+                    <message><![CDATA[Don't include Junit5 in runtime]]></message>
+                  </bannedDependencies>
+                  -->
+                </rules>
+              </configuration>
+            </execution>
+          </executions>
+        </plugin>
       </plugins>
     </pluginManagement>
     <plugins>
@@ -269,6 +383,10 @@
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>build-helper-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
       </plugin>
     </plugins>
 
